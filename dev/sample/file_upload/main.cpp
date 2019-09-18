@@ -99,7 +99,7 @@ std::string to_string(
 	return { what.data(), what.size() };
 }
 
-restinio::string_view_t get_boundary(
+std::string get_boundary(
 	const restinio::request_handle_t & req )
 {
 	// There should be content-type field.
@@ -122,7 +122,13 @@ restinio::string_view_t get_boundary(
 		throw std::runtime_error( "empty 'boundary' in content-type field: " +
 				to_string( content_type ) );
 
-	return boundary;
+	std::string result;
+	result.reserve( 2u + boundary.size() );
+	result.append( "--" );
+	// C++14 doesn't support string_view.
+	result.append( boundary.data(), boundary.size() );
+
+	return result;
 }
 
 restinio::optional_t< restinio::string_view_t > opt_field_value(
@@ -168,12 +174,10 @@ bool store_file_to_disk(
 	const std::string & file_name,
 	restinio::string_view_t raw_content )
 {
-	const restinio::string_view_t content_terminator{ "\r\n--" };
+	const restinio::string_view_t content_terminator{ "\r\n" };
 	if( ends_with( raw_content, content_terminator ) )
 		raw_content = raw_content.substr( 0u,
 				raw_content.size() - content_terminator.size() );
-	else
-		std::cout << "# THERE IS NO CONTENT TERMINATOR!" << std::endl;
 
 	std::ofstream dest_file;
 	dest_file.exceptions( std::ofstream::failbit );
