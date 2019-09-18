@@ -226,31 +226,37 @@ void save_file(
 	const auto boundary = get_boundary( req );
 
 	const restinio::string_view_t eol{ "\r\n" };
+	const restinio::string_view_t last_separator{ "--\r\n" };
 
-	restinio::string_view_t full_body_view{ req->body() };
-	restinio::string_view_t remaining_body_view{ full_body_view };
-	while( remaining_body_view.size() > boundary.size() )
+	restinio::string_view_t body_view =
+		[&boundary]( restinio::string_view_t body )
+		{
+			auto start = body.find( boundary );
+			if( restinio::string_view_t::npos == start )
+				throw std::runtime_error( "the first separator "
+						"isn't found in request body, boundary is: " +
+						boundary );
+			return body.substr( start + boundary.size() );
+		}( req->body() );
+
+	while( body_view.size() > boundary.size()
+			&& !starts_with( body_view, last_separator ) )
 	{
-		auto start = remaining_body_view.find( boundary );
-		if( restinio::string_view_t::npos == start )
-			break;
-		else
-			start += boundary.size();
-
-		const auto end = remaining_body_view.find( boundary, start );
+		const auto end = body_view.find( boundary );
 		if( restinio::string_view_t::npos == end )
-			break;
+				throw std::runtime_error( "the next separator "
+						"isn't found in request body, boundary is: " +
+						boundary );
 
-		auto fragment = remaining_body_view.substr( start, end - start );
+		auto fragment = body_view.substr( 0u, end );
 		if( starts_with( fragment, eol ) )
 			fragment = fragment.substr( eol.size() );
 		
 		if( try_handle_body_fragment( args, fragment ) )
 			break;
 
-		remaining_body_view = remaining_body_view.substr( end );
+		body_view = body_view.substr( end + boundary.size() );
 	}
-
 }
 
 auto make_router( const app_args_t & args )
