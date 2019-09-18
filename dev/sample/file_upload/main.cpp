@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <random>
+#include <fstream>
 
 #include <restinio/all.hpp>
 #include <restinio/transforms/zlib.hpp>
@@ -84,6 +85,14 @@ bool starts_with(
 			0 == where.compare(0u, what.size(), what);
 }
 
+bool ends_with(
+	const restinio::string_view_t & where,
+	const restinio::string_view_t & what ) noexcept
+{
+	return where.size() >= what.size() && 0 == where.compare(
+			where.size() - what.size(), what.size(), what);
+}
+
 std::string to_string(
 	const restinio::string_view_t & what )
 {
@@ -154,14 +163,33 @@ line_from_buffer_t get_line_from_buffer(
 	return { buffer.substr( 0u, pos ), buffer.substr( pos + eol.size() ) };
 }
 
+bool store_file_to_disk(
+	const app_args_t & args,
+	const std::string & file_name,
+	restinio::string_view_t raw_content )
+{
+	const restinio::string_view_t content_terminator{ "\r\n--" };
+	if( ends_with( raw_content, content_terminator ) )
+		raw_content = raw_content.substr( 0u,
+				raw_content.size() - content_terminator.size() );
+	else
+		std::cout << "# THERE IS NO CONTENT TERMINATOR!" << std::endl;
+
+	std::ofstream dest_file;
+	dest_file.exceptions( std::ofstream::failbit );
+	dest_file.open( args.m_dest_folder + "/" + file_name,
+			std::ios_base::out | std::ios_base::trunc | std::ios_base::binary );
+	dest_file.write( raw_content.data(), raw_content.size() );
+}
+
 bool try_handle_body_fragment(
 	const app_args_t & args,
 	restinio::string_view_t fragment )
 {
 	// Process fields at the beginning of the fragment.
 	restinio::optional_t< restinio::string_view_t > file_name;
-	for( auto line = get_line_from_buffer( fragment );
-			!line.m_line.empty();
+	auto line = get_line_from_buffer( fragment );
+	for(; !line.m_line.empty();
 			line = get_line_from_buffer( line.m_remaining_buffer ) )
 	{
 		if( starts_with( line.m_line, "Content-Disposition: form-data;" ) )
@@ -176,7 +204,12 @@ bool try_handle_body_fragment(
 
 	if( file_name )
 	{
-		std::cout << "# name of uploading file is: " << *file_name << std::endl;
+		store_file_to_disk(
+				args,
+				to_string( *file_name ),
+				line.m_remaining_buffer );
+
+		return true;
 	}
 
 	return false;
@@ -189,8 +222,6 @@ void save_file(
 	const auto boundary = get_boundary( req );
 
 	const restinio::string_view_t eol{ "\r\n" };
-
-	std::cout << "*** boundary: " << boundary << std::endl;
 
 	restinio::string_view_t full_body_view{ req->body() };
 	restinio::string_view_t remaining_body_view{ full_body_view };
