@@ -116,6 +116,27 @@ restinio::string_view_t get_boundary(
 	return boundary;
 }
 
+restinio::optional_t< restinio::string_view_t > opt_field_value(
+	const restinio::string_view_t & line,
+	const restinio::string_view_t & field_name )
+{
+	restinio::optional_t< restinio::string_view_t > result;
+
+	const auto field_pos = line.find( field_name );
+	if( restinio::string_view_t::npos != field_pos )
+	{
+		if( line.substr( field_pos + field_name.size(), 2u ) == "=\"" )
+		{
+			const auto value_pos = field_pos + field_name.size() + 2u;
+			const auto end = line.find( '"', value_pos );
+			if( restinio::string_view_t::npos != end )
+				result = line.substr( value_pos, end - value_pos );
+		}
+	}
+
+	return result;
+}
+
 struct line_from_buffer_t
 {
 	restinio::string_view_t m_line;
@@ -130,8 +151,6 @@ line_from_buffer_t get_line_from_buffer(
 	if( restinio::string_view_t::npos == pos )
 		throw std::runtime_error( "no lines with the correct EOL in the buffer" );
 
-std::cout << "### pos = " << pos << std::endl;
-
 	return { buffer.substr( 0u, pos ), buffer.substr( pos + eol.size() ) };
 }
 
@@ -139,16 +158,25 @@ bool try_handle_body_fragment(
 	const app_args_t & args,
 	restinio::string_view_t fragment )
 {
-	std::cout << "*** fragment: " << fragment << std::endl;
-
 	// Process fields at the beginning of the fragment.
 	restinio::optional_t< restinio::string_view_t > file_name;
-	auto line = get_line_from_buffer( fragment );
-	while( !line.m_line.empty() )
+	for( auto line = get_line_from_buffer( fragment );
+			!line.m_line.empty();
+			line = get_line_from_buffer( line.m_remaining_buffer ) )
 	{
-		std::cout << "**** line with field: " << line.m_line << std::endl;
+		if( starts_with( line.m_line, "Content-Disposition: form-data;" ) )
+		{
+			const auto field_name = opt_field_value( line.m_line, "name" );
+			if( field_name && *field_name == "file" )
+			{
+				file_name = opt_field_value( line.m_line, "filename" );
+			}
+		}
+	}
 
-		line = get_line_from_buffer( line.m_remaining_buffer );
+	if( file_name )
+	{
+		std::cout << "# name of uploading file is: " << *file_name << std::endl;
 	}
 
 	return false;
@@ -218,7 +246,7 @@ R"---(
 <p>Please select file to be uploaded to server.</p>
 <form method="post" action=")---" + action_url + R"---(" enctype="multipart/form-data">
     <p><input type="text" name="comment" id="comment-id" value=""></p>
-    <p><input type="file" name="file-field" id="file-id"></p>
+    <p><input type="file" name="file" id="file-id"></p>
     <p><button type="submit">Submit</button></p>
 </form>
 </body>
