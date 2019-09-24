@@ -7,7 +7,8 @@
 #include <fstream>
 
 #include <restinio/all.hpp>
-#include <restinio/transforms/zlib.hpp>
+
+#include <restinio/helpers/http_field_parser.hpp>
 
 #include <clara.hpp>
 #include <fmt/format.h>
@@ -106,18 +107,15 @@ std::string get_boundary(
 	const auto content_type = req->header().value_of(
 			restinio::http_field::content_type );
 
-	if( !starts_with( content_type, "multipart/form-data" ) )
-		throw std::runtime_error( "unexpected value of content-type field: " +
+	std::string boundary;
+	if( !restinio::http_field_parser::try_parse(
+			content_type, ';',
+			restinio::http_field_parser::expect( "multipart/form-data" ),
+			restinio::http_field_parser::name_value(
+					"boundary", boundary ) ) )
+		throw std::runtime_error( "unable to parse content-type field: " +
 				to_string( content_type ) );
 
-	const restinio::string_view_t boundary_mark{ "boundary=" };
-	const auto boundary_pos = content_type.find( boundary_mark );
-	if( restinio::string_view_t::npos == boundary_pos )
-		throw std::runtime_error( "there is no 'boundary' in content-type field: " +
-				to_string( content_type ) );
-
-	const auto boundary = content_type.substr(
-			boundary_pos + boundary_mark.size() );
 	if( boundary.empty() )
 		throw std::runtime_error( "empty 'boundary' in content-type field: " +
 				to_string( content_type ) );
@@ -125,29 +123,7 @@ std::string get_boundary(
 	std::string result;
 	result.reserve( 2u + boundary.size() );
 	result.append( "--" );
-	// C++14 doesn't support string_view.
-	result.append( boundary.data(), boundary.size() );
-
-	return result;
-}
-
-restinio::optional_t< restinio::string_view_t > opt_field_value(
-	const restinio::string_view_t & line,
-	const restinio::string_view_t & field_name )
-{
-	restinio::optional_t< restinio::string_view_t > result;
-
-	const auto field_pos = line.find( field_name );
-	if( restinio::string_view_t::npos != field_pos )
-	{
-		if( line.substr( field_pos + field_name.size(), 2u ) == "=\"" )
-		{
-			const auto value_pos = field_pos + field_name.size() + 2u;
-			const auto end = line.find( '"', value_pos );
-			if( restinio::string_view_t::npos != end )
-				result = line.substr( value_pos, end - value_pos );
-		}
-	}
+	result.append( boundary );
 
 	return result;
 }
@@ -191,17 +167,25 @@ bool try_handle_body_fragment(
 	restinio::string_view_t fragment )
 {
 	// Process fields at the beginning of the fragment.
-	restinio::optional_t< restinio::string_view_t > file_name;
+	restinio::optional_t< std::string > file_name;
 	auto line = get_line_from_buffer( fragment );
 	for(; !line.m_line.empty();
 			line = get_line_from_buffer( line.m_remaining_buffer ) )
 	{
-		if( starts_with( line.m_line, "Content-Disposition: form-data;" ) )
+		std::string name_value;
+		std::string filename_value;
+		if( restinio::http_field_parser::try_parse(
+				line.m_line, ';',
+				restinio::http_field_parser::expect(
+						"Content-Disposition: form-data" ),
+				restinio::http_field_parser::name_value(
+						"name", name_value ),
+				restinio::http_field_parser::name_value(
+						"filename", filename_value ) ) )
 		{
-			const auto field_name = opt_field_value( line.m_line, "name" );
-			if( field_name && *field_name == "file" )
+			if( name_value == "file" )
 			{
-				file_name = opt_field_value( line.m_line, "filename" );
+				file_name = filename_value;
 			}
 		}
 	}
