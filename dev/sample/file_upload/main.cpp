@@ -145,7 +145,7 @@ line_from_buffer_t get_line_from_buffer(
 	return { buffer.substr( 0u, pos ), buffer.substr( pos + eol.size() ) };
 }
 
-bool store_file_to_disk(
+void store_file_to_disk(
 	const app_args_t & args,
 	const std::string & file_name,
 	restinio::string_view_t raw_content )

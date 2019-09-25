@@ -31,12 +31,14 @@ struct character_t
 	char m_ch;
 };
 
+RESTINIO_NODISCARD
 inline bool
 operator==( const character_t & a, const character_t & b ) noexcept
 {
 	return (a.m_eof == b.m_eof && a.m_ch == b.m_ch);
 }
 
+RESTINIO_NODISCARD
 inline bool
 operator!=( const character_t & a, const character_t & b ) noexcept
 {
@@ -46,6 +48,7 @@ operator!=( const character_t & a, const character_t & b ) noexcept
 //
 // is_space
 //
+RESTINIO_NODISCARD
 inline bool
 is_space( const char ch ) noexcept { return ch == ' ' || ch == '\x09'; }
 
@@ -60,6 +63,7 @@ class source_t
 public:
 	explicit source_t( string_view_t data ) noexcept : m_data{ data } {}
 
+	RESTINIO_NODISCARD
 	character_t
 	getch() noexcept
 	{
@@ -78,6 +82,7 @@ public:
 			--m_index;
 	}
 
+	RESTINIO_NODISCARD
 	static bool
 	try_skip_leading_spaces( source_t & from ) noexcept
 	{
@@ -92,6 +97,7 @@ public:
 		return true;
 	}
 
+	RESTINIO_NODISCARD
 	static bool
 	try_skip_value(
 		source_t & from,
@@ -106,6 +112,7 @@ public:
 		return true;
 	}
 
+	RESTINIO_NODISCARD
 	static bool
 	try_skip_trailing_spaces_and_separator(
 		source_t & from,
@@ -135,8 +142,9 @@ class expect_t
 public:
 	explicit expect_t( string_view_t value ) noexcept : m_value{ value } {}
 
+	RESTINIO_NODISCARD
 	bool
-	try_parse( source_t & from, const char separator ) const && noexcept
+	try_parse( source_t & from, const char separator ) const noexcept
 	{
 		if( !source_t::try_skip_leading_spaces( from ) )
 			return false;
@@ -145,25 +153,20 @@ public:
 		if( !source_t::try_skip_value( from, m_value ) )
 			return false;
 
-		// Skip trailing spaces.
-		for( auto ch = from.getch();
-			character_t{false, separator} != ch;
-			ch = from.getch() )
-		{
-			if( !is_space( ch.m_ch ) ) return false;
-		}
-
-		return true;
+		return source_t::try_skip_trailing_spaces_and_separator(
+				from,
+				separator );
 	}
 };
 
+RESTINIO_NODISCARD
 inline bool
 parse_next(
 	source_t & source,
 	const char separator,
 	expect_t && what ) noexcept
 {
-	return std::move(what).try_parse( source, separator );
+	return what.try_parse( source, separator );
 }
 
 //
@@ -178,8 +181,9 @@ public:
 		: m_collector{ collector }
 	{}
 
+	RESTINIO_NODISCARD
 	bool
-	try_parse( source_t & from, const char separator ) &&
+	try_parse( source_t & from, const char separator )
 	{
 		for( auto ch = from.getch();
 				!ch.m_eof && ch.m_ch != separator;
@@ -192,13 +196,14 @@ public:
 	}
 };
 
+RESTINIO_NODISCARD
 inline bool
 parse_next(
 	source_t & source,
 	const char separator,
 	any_value_t && what )
 {
-	return std::move(what).try_parse( source, separator );
+	return what.try_parse( source, separator );
 }
 
 //
@@ -209,8 +214,9 @@ class name_value_t
 	const string_view_t m_name;
 	std::string & m_collector;
 
+	RESTINIO_NODISCARD
 	bool
-	try_parse_unquoted_value( source_t & from, const char separator ) &&
+	try_parse_unquoted_value( source_t & from, const char separator )
 	{
 		character_t ch;
 		for( ch = from.getch();
@@ -230,8 +236,9 @@ class name_value_t
 		return true;
 	}
 
+	RESTINIO_NODISCARD
 	bool
-	try_parse_quoted_value( source_t & from, const char separator ) &&
+	try_parse_quoted_value( source_t & from, const char separator )
 	{
 		for(;;)
 		{
@@ -264,8 +271,9 @@ public:
 		, m_collector{ collector }
 	{}
 
+	RESTINIO_NODISCARD
 	bool
-	try_parse( source_t & from, const char separator ) &&
+	try_parse( source_t & from, const char separator )
 	{
 		if( !source_t::try_skip_leading_spaces( from ) )
 			return false;
@@ -284,26 +292,28 @@ public:
 		if( '"' != first_value_ch.m_ch )
 		{
 			from.putback();
-			return std::move(*this).try_parse_unquoted_value( from, separator );
+			return try_parse_unquoted_value( from, separator );
 		}
 		else
-			return std::move(*this).try_parse_quoted_value( from, separator );
+			return try_parse_quoted_value( from, separator );
 	}
 };
 
+RESTINIO_NODISCARD
 inline bool
 parse_next(
 	source_t & source,
 	const char separator,
 	name_value_t && what )
 {
-	return std::move(what).try_parse( source, separator );
+	return what.try_parse( source, separator );
 }
 
 //
 // try_parse_impl
 //
 template< typename H >
+RESTINIO_NODISCARD
 bool
 try_parse_impl( source_t & from, const char separator, H && what )
 {
@@ -311,6 +321,7 @@ try_parse_impl( source_t & from, const char separator, H && what )
 }
 
 template< typename H, typename ...Tail >
+RESTINIO_NODISCARD
 bool
 try_parse_impl(
 	source_t & from,
@@ -331,6 +342,7 @@ try_parse_impl(
 // try_parse
 //
 template< typename ...Fragments >
+RESTINIO_NODISCARD
 bool
 try_parse(
 	string_view_t from,
@@ -347,6 +359,7 @@ try_parse(
 //
 // expect
 //
+RESTINIO_NODISCARD
 inline auto
 expect( string_view_t what ) noexcept
 {
@@ -356,6 +369,7 @@ expect( string_view_t what ) noexcept
 //
 // any
 //
+RESTINIO_NODISCARD
 inline auto
 any( std::string & collector ) noexcept
 {
@@ -365,6 +379,7 @@ any( std::string & collector ) noexcept
 //
 // name_value_t
 //
+RESTINIO_NODISCARD
 inline auto
 name_value(
 	string_view_t what,
