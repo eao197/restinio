@@ -176,7 +176,7 @@ bool try_handle_body_fragment(
 		std::string filename_value;
 		if( restinio::http_field_parser::try_parse_whole_field(
 				line.m_line,
-				"Content-Disposition",
+				"content-disposition",
 				';',
 				restinio::http_field_parser::expect(
 						"form-data" ),

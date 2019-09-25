@@ -11,6 +11,8 @@
 
 #pragma once
 
+#include <restinio/impl/to_lower_lut.hpp>
+
 #include <restinio/string_view.hpp>
 
 namespace restinio
@@ -103,10 +105,16 @@ public:
 		source_t & from,
 		const string_view_t & value ) noexcept
 	{
+		const unsigned char * const table =
+				restinio::impl::to_lower_lut< unsigned char >();
+		const auto uchar_from_table = [table](char c) {
+			return table[ static_cast<unsigned char>(c) ];
+		};
+
 		for( const auto c : value )
 		{
-//FIXME: there should be a caseless compare!
-			if( character_t{false, c} != from.getch() )
+			const auto ch = from.getch();
+			if( ch.m_eof || uchar_from_table(c) != uchar_from_table(ch.m_ch) )
 				return false;
 		}
 		return true;

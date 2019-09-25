@@ -117,7 +117,7 @@ SET(RESTINIO_HEADERS_ALL
 	impl/sendfile_operation_posix.ipp
 	impl/sendfile_operation_win.ipp
 	impl/tls_socket.hpp
-	impl/to_lower_lut.ipp
+	impl/to_lower_lut.hpp
 
 	path2regex/path2regex.hpp
 
