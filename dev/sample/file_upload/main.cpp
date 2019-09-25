@@ -108,7 +108,7 @@ std::string get_boundary(
 			restinio::http_field::content_type );
 
 	std::string boundary;
-	if( !restinio::http_field_parser::try_parse(
+	if( !restinio::http_field_parser::try_parse_field_value(
 			content_type, ';',
 			restinio::http_field_parser::expect( "multipart/form-data" ),
 			restinio::http_field_parser::name_value(
@@ -174,10 +174,12 @@ bool try_handle_body_fragment(
 	{
 		std::string name_value;
 		std::string filename_value;
-		if( restinio::http_field_parser::try_parse(
-				line.m_line, ';',
+		if( restinio::http_field_parser::try_parse_whole_field(
+				line.m_line,
+				"Content-Disposition",
+				';',
 				restinio::http_field_parser::expect(
-						"Content-Disposition: form-data" ),
+						"form-data" ),
 				restinio::http_field_parser::name_value(
 						"name", name_value ),
 				restinio::http_field_parser::name_value(

@@ -310,6 +310,41 @@ parse_next(
 }
 
 //
+// field_name_t
+//
+class field_name_t
+{
+	const string_view_t m_name;
+
+public:
+	explicit field_name_t( string_view_t name ) noexcept : m_name{ name } {}
+
+	RESTINIO_NODISCARD
+	bool
+	try_parse( source_t & from ) const noexcept
+	{
+		// There should not be leading spaces.
+		// Compare the main value.
+		if( !source_t::try_skip_value( from, m_name ) )
+			return false;
+
+		// The next char is expected to be ':'.
+		const auto ch = from.getch();
+		return !ch.m_eof && ch.m_ch == ':';
+	}
+};
+
+RESTINIO_NODISCARD
+inline bool
+parse_next(
+	source_t & source,
+	const char separator,
+	field_name_t && what ) noexcept
+{
+	return what.try_parse( source );
+}
+
+//
 // try_parse_impl
 //
 template< typename H >
@@ -339,12 +374,12 @@ try_parse_impl(
 } /* namespace impl */
 
 //
-// try_parse
+// try_parse_field_value
 //
 template< typename ...Fragments >
 RESTINIO_NODISCARD
 bool
-try_parse(
+try_parse_field_value(
 	string_view_t from,
 	const char separator,
 	Fragments && ...fragments )
@@ -353,6 +388,26 @@ try_parse(
 	return impl::try_parse_impl(
 			source,
 			separator,
+			std::forward<Fragments>(fragments)... );
+}
+
+//
+// try_parse_whole_field
+//
+template< typename ...Fragments >
+RESTINIO_NODISCARD
+bool
+try_parse_whole_field(
+	string_view_t from,
+	string_view_t field_name,
+	const char separator,
+	Fragments && ...fragments )
+{
+	impl::source_t source{ from };
+	return impl::try_parse_impl(
+			source,
+			separator,
+			impl::field_name_t{ field_name },
 			std::forward<Fragments>(fragments)... );
 }
 
