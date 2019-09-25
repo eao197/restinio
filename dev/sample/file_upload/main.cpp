@@ -228,17 +228,19 @@ void save_file(
 	while( body_view.size() > boundary.size()
 			&& !starts_with( body_view, last_separator ) )
 	{
+		if( starts_with( body_view, eol ) )
+			body_view = body_view.substr( eol.size() );
+		else
+			throw std::runtime_error( "EOL is not found after a fragment-openning "
+					"boundary" );
+
 		const auto end = body_view.find( boundary );
 		if( restinio::string_view_t::npos == end )
-				throw std::runtime_error( "the next separator "
-						"isn't found in request body, boundary is: " +
-						boundary );
+			throw std::runtime_error( "the next separator "
+					"isn't found in request body, boundary is: " +
+					boundary );
 
-		auto fragment = body_view.substr( 0u, end );
-		if( starts_with( fragment, eol ) )
-			fragment = fragment.substr( eol.size() );
-		
-		if( try_handle_body_fragment( args, fragment ) )
+		if( try_handle_body_fragment( args, body_view.substr( 0u, end ) ) )
 			break;
 
 		body_view = body_view.substr( end + boundary.size() );
