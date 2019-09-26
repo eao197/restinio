@@ -76,10 +76,10 @@ struct head_of<T>
  * @brief Metafunction to get the first item from a list of types.
  *
  * Usage example:
- * \code
+ * @code
  * using T = restinio::utils::metaprogramming::head_of_t<int, float, double>;
  * static_assert(std::is_same_v<T, int>, "T isn't int");
- * \endcode
+ * @endcode
  *
  * @since v.0.6.1
  */
@@ -113,11 +113,11 @@ struct tail_of<L>
  * just one type then `type_list<>` is returned.
  *
  * Usage example:
- * \code
+ * @code
  * using T = restinio::utils::metaprogramming::tail_of_t<int, float, double>;
  * static_assert(std::is_same_v<T,
  * 		restinio::utils::metaprogramming::typelist<float, double> >, "!Ok");
- * \endcode
+ * @endcode
  *
  * @since v.0.6.1
  */
@@ -148,12 +148,12 @@ struct put_front< T, L<Rest...> >
  * @brief Metafunction to insert a type to the front of a type_list.
  *
  * Usage example:
- * \code
+ * @code
  * using namespace restinio::utils::metaprogramming;
  *
  * using T = put_front_t<int, type_list<float, double>>;
  * static_assert(std::is_same_v<T, typelist<int, float, double> >, "!Ok");
- * \endcode
+ * @endcode
  *
  * @since v.0.6.1
  */
@@ -183,7 +183,18 @@ struct rename<From<Types...>, To>
 //
 // rename_t
 //
-//FIXME: document this!
+/*!
+ * @brief Allows to pass all template arguments from one type to another.
+ *
+ * Usage example:
+ * @code
+ * using namespace restinio::utils::metaprogramming;
+ * using T = rename_t<typelist<int, float, double>, std::tuple>;
+ * static_assert(std::is_same_v<T, std::tuble<int, float, double>>, "!Ok");
+ * @endcode
+ *
+ * @since v.0.6.1
+ */
 template<typename From, template<class...> class To>
 using rename_t = typename impl::rename<From, To>::type;
 

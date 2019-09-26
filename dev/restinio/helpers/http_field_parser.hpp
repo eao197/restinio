@@ -13,7 +13,12 @@
 
 #include <restinio/impl/to_lower_lut.hpp>
 
+#include <restinio/utils/metaprogramming.hpp>
+
 #include <restinio/string_view.hpp>
+
+#include <type_traits>
+#include <tuple>
 
 namespace restinio
 {
@@ -148,6 +153,8 @@ class expect_t
 	const string_view_t m_value;
 
 public:
+	using value_type = void;
+
 	explicit expect_t( string_view_t value ) noexcept : m_value{ value } {}
 
 	RESTINIO_NODISCARD
@@ -185,6 +192,8 @@ class any_value_t
 	std::string & m_collector;
 
 public:
+	using value_type = std::string;
+
 	explicit any_value_t( std::string & collector )
 		: m_collector{ collector }
 	{}
@@ -272,6 +281,8 @@ class name_value_t
 	}
 
 public:
+	using value_type = std::string;
+
 	explicit name_value_t(
 		string_view_t name,
 		std::string & collector ) noexcept
@@ -325,6 +336,8 @@ class field_name_t
 	const string_view_t m_name;
 
 public:
+	using value_type = std::string;
+
 	explicit field_name_t( string_view_t name ) noexcept : m_name{ name } {}
 
 	RESTINIO_NODISCARD
@@ -351,6 +364,60 @@ parse_next(
 {
 	return what.try_parse( source );
 }
+
+namespace meta {
+
+namespace mp = restinio::utils::metaprogramming;
+
+template<typename T>
+using to_tuple_t = mp::rename_t<T, std::tuple>;
+
+template<typename T>
+struct is_void_value_type
+{
+	static constexpr bool value =
+			std::is_same<void, typename T::value_type>::value;
+};
+
+template<typename T>
+struct type_list_maker;
+
+template<template<class...> class L>
+struct type_list_maker< L<> >
+{
+	using type = mp::type_list<>;
+};
+
+template<
+	template<class...> class L,
+	typename... Rest>
+struct type_list_maker< L<Rest...> >
+	: type_list_maker< mp::tail_of_t<Rest...> >
+{
+	using base_type = type_list_maker< mp::tail_of_t<Rest...> >;
+	using T = mp::tail_of_t< L<Rest...> >;
+
+	using type = typename std::conditional<
+			is_void_value_type<T>::value,
+			typename base_type::type,
+			mp::put_front_t<typename T::value_type, typename base_type::type>
+		>::type;
+};
+
+template<typename... Rest>
+using make_type_list_t =
+		typename type_list_maker< mp::type_list<Rest...> >::type;
+
+template<typename... Fragments>
+using result_type_detector_t =
+		to_tuple_t<
+				mp::put_front_t<
+						bool,
+						make_type_list_t<Fragments...>
+				>
+		>;
+
+} /* namespace meta */
 
 //
 // try_parse_impl
