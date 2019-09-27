@@ -107,15 +107,15 @@ std::string get_boundary(
 	const auto content_type = req->header().value_of(
 			restinio::http_field::content_type );
 
-	std::string boundary;
-	if( !restinio::http_field_parser::try_parse_field_value(
+	const auto r = restinio::http_field_parser::try_parse_field_value(
 			content_type, ';',
 			restinio::http_field_parser::expect( "multipart/form-data" ),
-			restinio::http_field_parser::name_value(
-					"boundary", boundary ) ) )
+			restinio::http_field_parser::name_value( "boundary" ) );
+	if( !std::get<0>(r) )
 		throw std::runtime_error( "unable to parse content-type field: " +
 				to_string( content_type ) );
 
+	const auto & boundary = std::get<1>(r);
 	if( boundary.empty() )
 		throw std::runtime_error( "empty 'boundary' in content-type field: " +
 				to_string( content_type ) );
@@ -172,23 +172,18 @@ bool try_handle_body_fragment(
 	for(; !line.m_line.empty();
 			line = get_line_from_buffer( line.m_remaining_buffer ) )
 	{
-		std::string name_value;
-		std::string filename_value;
-		if( restinio::http_field_parser::try_parse_whole_field(
+		const auto r = restinio::http_field_parser::try_parse_whole_field(
 				line.m_line,
 				"content-disposition",
 				';',
-				restinio::http_field_parser::expect(
-						"form-data" ),
-				restinio::http_field_parser::name_value(
-						"name", name_value ),
-				restinio::http_field_parser::name_value(
-						"filename", filename_value ) ) )
+				restinio::http_field_parser::expect( "form-data" ),
+				restinio::http_field_parser::name_value( "name" ),
+				restinio::http_field_parser::name_value( "filename" ) );
+
+		if( std::get<0>(r) )
 		{
-			if( name_value == "file" )
-			{
-				file_name = filename_value;
-			}
+			if( "file" == std::get<1>(r) )
+				file_name = std::get<2>(r);
 		}
 	}
 

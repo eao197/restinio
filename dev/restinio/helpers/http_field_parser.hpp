@@ -174,14 +174,15 @@ public:
 	}
 };
 
-RESTINIO_NODISCARD
-inline bool
+template<std::size_t Index, typename Result>
+void
 parse_next(
+	Result & result,
 	source_t & source,
 	const char separator,
 	expect_t && what ) noexcept
 {
-	return what.try_parse( source, separator );
+	std::get<0>(result) = what.try_parse( source, separator );
 }
 
 //
@@ -189,38 +190,34 @@ parse_next(
 //
 class any_value_t
 {
-	std::string & m_collector;
-
 public:
 	using value_type = std::string;
 
-	explicit any_value_t( std::string & collector )
-		: m_collector{ collector }
-	{}
-
 	RESTINIO_NODISCARD
 	bool
-	try_parse( source_t & from, const char separator )
+	try_parse( source_t & from, const char separator, value_type & collector )
 	{
 		for( auto ch = from.getch();
 				!ch.m_eof && ch.m_ch != separator;
 				ch = from.getch() )
 		{
-			m_collector += ch.m_ch;
+			collector += ch.m_ch;
 		}
 
 		return true;
 	}
 };
 
-RESTINIO_NODISCARD
-inline bool
+template<std::size_t Index, typename Result>
+void
 parse_next(
+	Result & result,
 	source_t & source,
 	const char separator,
 	any_value_t && what )
 {
-	return what.try_parse( source, separator );
+	any_value_t::value_type & collector = std::get<Index>(result);
+	std::get<0>(result) = what.try_parse( source, separator, collector );
 }
 
 //
@@ -228,12 +225,18 @@ parse_next(
 //
 class name_value_t
 {
+public:
+	using value_type = std::string;
+
+private:
 	const string_view_t m_name;
-	std::string & m_collector;
 
 	RESTINIO_NODISCARD
 	bool
-	try_parse_unquoted_value( source_t & from, const char separator )
+	try_parse_unquoted_value(
+		source_t & from,
+		const char separator,
+		value_type & collector )
 	{
 		character_t ch;
 		for( ch = from.getch();
@@ -242,7 +245,7 @@ class name_value_t
 				separator != ch.m_ch;
 				ch = from.getch() )
 		{
-			m_collector += ch.m_ch;
+			collector += ch.m_ch;
 		}
 
 		if( !ch.m_eof && separator != ch.m_ch )
@@ -255,7 +258,10 @@ class name_value_t
 
 	RESTINIO_NODISCARD
 	bool
-	try_parse_quoted_value( source_t & from, const char separator )
+	try_parse_quoted_value(
+		source_t & from,
+		const char separator,
+		value_type & collector )
 	{
 		for(;;)
 		{
@@ -268,10 +274,10 @@ class name_value_t
 				const auto next = from.getch();
 				if( next.m_eof )
 					return false;
-				m_collector += next.m_ch;
+				collector += next.m_ch;
 			}
 			else
-				m_collector += ch.m_ch;
+				collector += ch.m_ch;
 		}
 
 		// All trailing spaces and separator should be skipped.
@@ -281,18 +287,13 @@ class name_value_t
 	}
 
 public:
-	using value_type = std::string;
-
-	explicit name_value_t(
-		string_view_t name,
-		std::string & collector ) noexcept
+	explicit name_value_t( string_view_t name ) noexcept
 		: m_name{ name }
-		, m_collector{ collector }
 	{}
 
 	RESTINIO_NODISCARD
 	bool
-	try_parse( source_t & from, const char separator )
+	try_parse( source_t & from, const char separator, value_type & collector )
 	{
 		if( !source_t::try_skip_leading_spaces( from ) )
 			return false;
@@ -311,21 +312,23 @@ public:
 		if( '"' != first_value_ch.m_ch )
 		{
 			from.putback();
-			return try_parse_unquoted_value( from, separator );
+			return try_parse_unquoted_value( from, separator, collector );
 		}
 		else
-			return try_parse_quoted_value( from, separator );
+			return try_parse_quoted_value( from, separator, collector );
 	}
 };
 
-RESTINIO_NODISCARD
-inline bool
+template<std::size_t Index, typename Result>
+void
 parse_next(
+	Result & result,
 	source_t & source,
 	const char separator,
 	name_value_t && what )
 {
-	return what.try_parse( source, separator );
+	any_value_t::value_type & collector = std::get<Index>(result);
+	std::get<0>(result) = what.try_parse( source, separator, collector );
 }
 
 //
@@ -336,7 +339,7 @@ class field_name_t
 	const string_view_t m_name;
 
 public:
-	using value_type = std::string;
+	using value_type = void;
 
 	explicit field_name_t( string_view_t name ) noexcept : m_name{ name } {}
 
@@ -355,14 +358,15 @@ public:
 	}
 };
 
-RESTINIO_NODISCARD
-inline bool
+template<std::size_t Index, typename Result>
+void
 parse_next(
+	Result & result,
 	source_t & source,
-	const char separator,
+	const char /*separator*/,
 	field_name_t && what ) noexcept
 {
-	return what.try_parse( source );
+	std::get<0>(result) = what.try_parse( source );
 }
 
 namespace meta {
@@ -377,6 +381,13 @@ struct is_void_value_type
 {
 	static constexpr bool value =
 			std::is_same<void, typename T::value_type>::value;
+};
+
+template<typename T>
+struct detect_increment
+{
+	static constexpr std::size_t value =
+			is_void_value_type<T>::value ? 0u : 1u;
 };
 
 template<typename T>
@@ -395,7 +406,7 @@ struct type_list_maker< L<Rest...> >
 	: type_list_maker< mp::tail_of_t<Rest...> >
 {
 	using base_type = type_list_maker< mp::tail_of_t<Rest...> >;
-	using T = mp::tail_of_t< L<Rest...> >;
+	using T = mp::head_of_t<Rest...>;
 
 	using type = typename std::conditional<
 			is_void_value_type<T>::value,
@@ -422,28 +433,26 @@ using result_type_detector_t =
 //
 // try_parse_impl
 //
-template< typename H >
-RESTINIO_NODISCARD
-bool
-try_parse_impl( source_t & from, const char separator, H && what )
+template< std::size_t Index, typename R, typename H >
+void
+try_parse_impl( R & result, source_t & from, const char separator, H && what )
 {
-	return parse_next( from, separator, std::forward<H>(what) );
+	parse_next<Index>( result, from, separator, std::forward<H>(what) );
 }
 
-template< typename H, typename ...Tail >
-RESTINIO_NODISCARD
-bool
+template< std::size_t Index, typename R, typename H, typename ...Tail >
+void
 try_parse_impl(
+	R & result,
 	source_t & from,
 	const char separator,
 	H && what,
 	Tail && ...tail )
 {
-	auto r = parse_next( from, separator, std::forward<H>(what) );
-	if( r )
-		r = try_parse_impl( from, separator, std::forward<Tail>(tail)... );
-
-	return r;
+	parse_next<Index>( result, from, separator, std::forward<H>(what) );
+	if( std::get<0>(result) )
+		try_parse_impl<Index + meta::detect_increment<H>::value>(
+				result, from, separator, std::forward<Tail>(tail)... );
 }
 
 } /* namespace impl */
@@ -453,17 +462,27 @@ try_parse_impl(
 //
 template< typename ...Fragments >
 RESTINIO_NODISCARD
-bool
+auto
 try_parse_field_value(
 	string_view_t from,
 	const char separator,
 	Fragments && ...fragments )
 {
 	impl::source_t source{ from };
-	return impl::try_parse_impl(
+
+	using result_tuple_t = impl::meta::result_type_detector_t<Fragments...>;
+	result_tuple_t result;
+
+	std::get<0>(result) = false;
+
+	// Use index 1 because index 0 is used by boolean flag.
+	impl::try_parse_impl<1>(
+			result,
 			source,
 			separator,
 			std::forward<Fragments>(fragments)... );
+
+	return result;
 }
 
 //
@@ -471,7 +490,7 @@ try_parse_field_value(
 //
 template< typename ...Fragments >
 RESTINIO_NODISCARD
-bool
+auto
 try_parse_whole_field(
 	string_view_t from,
 	string_view_t field_name,
@@ -479,11 +498,21 @@ try_parse_whole_field(
 	Fragments && ...fragments )
 {
 	impl::source_t source{ from };
-	return impl::try_parse_impl(
+
+	using result_tuple_t = impl::meta::result_type_detector_t<Fragments...>;
+	result_tuple_t result;
+
+	std::get<0>(result) = false;
+
+	// Use index 1 because index 0 is used by boolean flag.
+	impl::try_parse_impl<1>(
+			result,
 			source,
 			separator,
 			impl::field_name_t{ field_name },
 			std::forward<Fragments>(fragments)... );
+
+	return result;
 }
 
 //
@@ -501,9 +530,9 @@ expect( string_view_t what ) noexcept
 //
 RESTINIO_NODISCARD
 inline auto
-any( std::string & collector ) noexcept
+any() noexcept
 {
-	return impl::any_value_t{ collector };
+	return impl::any_value_t{};
 }
 
 //
@@ -512,10 +541,9 @@ any( std::string & collector ) noexcept
 RESTINIO_NODISCARD
 inline auto
 name_value(
-	string_view_t what,
-	std::string & collector ) noexcept
+	string_view_t what ) noexcept
 {
-	return impl::name_value_t{ what, collector };
+	return impl::name_value_t{ what };
 }
 
 } /* namespace http_field_parser */
