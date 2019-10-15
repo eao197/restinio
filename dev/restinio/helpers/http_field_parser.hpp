@@ -234,24 +234,81 @@ current_content() const noexcept
 
 };
 
-template< typename P >
-class value_producer_t
+enum class construction_time_t
 {
+	compiletime,
+	runtime
+};
+
+template< typename Target_Type, construction_time_t Construction_Time >
+struct producer_tag
+{
+	using target_type = Target_Type;
+	static constexpr construction_time_t construction_time = Construction_Time;
+};
+
+template< typename P >
+class constexpr_constructible_value_producer_t
+{
+protected :
 	P m_producer;
 
 public :
-	value_producer_t( P && producer ) : m_producer{ std::move(producer) } {}
+	constexpr constexpr_constructible_value_producer_t( P && producer )
+		:	m_producer{ std::move(producer) }
+	{}
+};
+
+template< typename P >
+class runtime_constructible_value_producer_t
+{
+protected :
+	P m_producer;
+
+public :
+	runtime_constructible_value_producer_t( P && producer )
+		:	m_producer{ std::move(producer) }
+	{}
+};
+
+template< typename P, construction_time_t Construction_Time >
+struct value_producer_base_selector_impl;
+
+template< typename P >
+struct value_producer_base_selector_impl<P, construction_time_t::compiletime>
+{
+	using type = constexpr_constructible_value_producer_t<P>;
+};
+
+template< typename P >
+struct value_producer_base_selector_impl<P, construction_time_t::runtime>
+{
+	using type = runtime_constructible_value_producer_t<P>;
+};
+
+template< typename P >
+using value_producer_base_selector_t =
+	typename value_producer_base_selector_impl< P, P::construction_time >::type;
+
+template< typename P >
+class value_producer_t
+	: protected value_producer_base_selector_t<P>
+{
+	using base_type = value_producer_base_selector_t<P>;
+
+public :
+	using base_type::base_type;
 
 	P giveaway() noexcept(noexcept(P{std::move(std::declval<P>())}))
 	{
-		return std::move(m_producer);
+		return std::move(this->m_producer);
 	}
 
 	RESTINIO_NODISCARD
 	auto
 	try_parse( source_t & source )
 	{
-		return m_producer.try_parse( source );
+		return this->m_producer.try_parse( source );
 	}
 };
 
@@ -291,6 +348,9 @@ public :
 
 template< typename Producer, typename Transformer >
 class transformed_value_producer_t
+	:	public producer_tag<
+				typename Producer::target_type,
+				Producer::construction_time >
 {
 	Producer m_producer;
 	Transformer m_transformer;
@@ -447,6 +507,7 @@ template<
 	typename Target_Type,
 	typename Subitems_Tuple >
 class alternatives_t
+	: public producer_tag<Target_Type, construction_time_t::runtime>
 {
 	Subitems_Tuple m_subitems;
 
@@ -484,6 +545,7 @@ template<
 	typename Target_Type,
 	typename Subitems_Tuple >
 class produce_t
+	: public producer_tag<Target_Type, construction_time_t::runtime>
 {
 	Subitems_Tuple m_subitems;
 
@@ -521,6 +583,7 @@ template<
 	typename Target_Type,
 	typename Subitems_Tuple >
 class optional_producer_t
+	: public producer_tag<Target_Type, construction_time_t::runtime>
 {
 	Subitems_Tuple m_subitems;
 
@@ -563,6 +626,9 @@ template<
 	typename Container_Adaptor,
 	typename Subitems_Tuple >
 class repeat_t
+	: public producer_tag<
+			typename Container_Adaptor::container_type,
+			construction_time_t::runtime>
 {
 	using container_type = typename Container_Adaptor::container_type;
 	using value_type = typename Container_Adaptor::value_type;
@@ -623,6 +689,9 @@ template<
 	typename Container_Adaptor,
 	typename Producer >
 class one_or_more_of_t
+	: public producer_tag<
+			typename Container_Adaptor::container_type,
+			construction_time_t::runtime>
 {
 	using container_type = typename Container_Adaptor::container_type;
 	using value_type = typename Container_Adaptor::value_type;
@@ -643,6 +712,9 @@ namespace rfc
 {
 
 class ows_t
+	:	public producer_tag<
+			restinio::optional_t<char>,
+			construction_time_t::compiletime >
 {
 public :
 	RESTINIO_NODISCARD
@@ -676,6 +748,9 @@ public :
 // token_t
 //
 class token_t
+	:	public producer_tag<
+			std::string,
+			construction_time_t::compiletime >
 {
 	RESTINIO_NODISCARD
 	static bool
@@ -740,6 +815,9 @@ public :
 // quoted_string_t
 //
 class quoted_string_t
+	:	public producer_tag<
+			std::string,
+			construction_time_t::compiletime >
 {
 	RESTINIO_NODISCARD
 	static bool
@@ -805,11 +883,14 @@ public :
 // symbol_t
 //
 class symbol_t
+	:	public producer_tag<
+			char,
+			construction_time_t::compiletime >
 {
 	char m_expected;
 
 public:
-	symbol_t( char expected ) : m_expected{ expected } {}
+	constexpr symbol_t( char expected ) : m_expected{ expected } {}
 
 	RESTINIO_NODISCARD
 	auto
@@ -1108,23 +1189,24 @@ namespace rfc
 //
 // ows
 //
-RESTINIO_NODISCARD
-impl::value_producer_t< impl::rfc::ows_t >
-ows() noexcept { return { impl::rfc::ows_t{} }; }
+constexpr impl::value_producer_t< impl::rfc::ows_t > ows{
+	impl::rfc::ows_t{}
+};
 
 //
 // token
 //
-RESTINIO_NODISCARD
-impl::value_producer_t< impl::rfc::token_t >
-token() noexcept { return { impl::rfc::token_t{} }; }
+constexpr impl::value_producer_t< impl::rfc::token_t > token{
+	impl::rfc::token_t{}
+};
 
 //
 // quoted_string
 //
-RESTINIO_NODISCARD
-impl::value_producer_t< impl::rfc::quoted_string_t >
-quoted_string() noexcept { return { impl::rfc::quoted_string_t{} }; }
+constexpr impl::value_producer_t< impl::rfc::quoted_string_t >
+quoted_string{
+	impl::rfc::quoted_string_t{}
+};
 
 } /* namespace rfc */
 
@@ -1145,7 +1227,7 @@ one_or_more_of_t<Container_Adaptor, Producer>::try_parse( source_t & from )
 
 	auto opt_intro_clause = repeat< nothing_t >( 0, N,
 		symbol(',') >> skip(),
-		hfp::rfc::ows() >> skip() ) >> skip();
+		hfp::rfc::ows >> skip() ) >> skip();
 	if( opt_intro_clause.try_process( from, result.second ) )
 	{
 		auto the_first_item_clause = m_producer >> custom_consumer(
@@ -1156,10 +1238,10 @@ one_or_more_of_t<Container_Adaptor, Producer>::try_parse( source_t & from )
 		{
 			auto remaining_item_clause =
 				produce< restinio::optional_t<value_type> >(
-					hfp::rfc::ows() >> skip(),
+					hfp::rfc::ows >> skip(),
 					symbol(',') >> skip(),
 					optional< value_type >(
-						hfp::rfc::ows() >> skip(),
+						hfp::rfc::ows >> skip(),
 						m_producer >> as_result()
 					) >> as_result()
 				) >> custom_consumer(

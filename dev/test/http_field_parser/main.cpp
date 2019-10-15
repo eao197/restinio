@@ -38,7 +38,7 @@ TEST_CASE( "token >> skip", "[token][skip]" )
 
 	const auto result = hfp::try_parse_field_value< empty_type_t >(
 			"multipart",
-			hfp::rfc::token() >> hfp::skip() );
+			hfp::rfc::token >> hfp::skip() );
 
 	REQUIRE( result.first );
 }
@@ -50,9 +50,9 @@ TEST_CASE( "token+symbol+token >> skip", "[token+symbol+token][skip]" )
 	{
 		const auto result = hfp::try_parse_field_value< empty_type_t >(
 				"multipart/form-data",
-				hfp::rfc::token() >> hfp::skip(),
+				hfp::rfc::token >> hfp::skip(),
 				hfp::symbol('/') >> hfp::skip(),
-				hfp::rfc::token() >> hfp::skip() );
+				hfp::rfc::token >> hfp::skip() );
 
 		REQUIRE( result.first );
 	}
@@ -60,9 +60,9 @@ TEST_CASE( "token+symbol+token >> skip", "[token+symbol+token][skip]" )
 	{
 		const auto result = hfp::try_parse_field_value< empty_type_t >(
 				"multipart+form-data",
-				hfp::rfc::token() >> hfp::skip(),
+				hfp::rfc::token >> hfp::skip(),
 				hfp::symbol('/') >> hfp::skip(),
-				hfp::rfc::token() >> hfp::skip() );
+				hfp::rfc::token >> hfp::skip() );
 
 		REQUIRE( !result.first );
 	}
@@ -70,9 +70,9 @@ TEST_CASE( "token+symbol+token >> skip", "[token+symbol+token][skip]" )
 	{
 		const auto result = hfp::try_parse_field_value< empty_type_t >(
 				"multipart/",
-				hfp::rfc::token() >> hfp::skip(),
+				hfp::rfc::token >> hfp::skip(),
 				hfp::symbol('/') >> hfp::skip(),
-				hfp::rfc::token() >> hfp::skip() );
+				hfp::rfc::token >> hfp::skip() );
 
 		REQUIRE( !result.first );
 	}
@@ -82,9 +82,9 @@ TEST_CASE( "token+symbol+token >> into", "[token+symbol+token][into]" )
 {
 	const auto result = hfp::try_parse_field_value< media_type_t >(
 			"multipart/form-data",
-			hfp::rfc::token() >> &media_type_t::m_type,
+			hfp::rfc::token >> &media_type_t::m_type,
 			hfp::symbol('/') >> hfp::skip(),
-			hfp::rfc::token() >> &media_type_t::m_subtype );
+			hfp::rfc::token >> &media_type_t::m_subtype );
 
 	REQUIRE( result.first );
 	REQUIRE( "multipart" == result.second.m_type );
@@ -96,13 +96,13 @@ TEST_CASE( "alternatives with symbol", "[alternatives][symbol][into]" )
 	const auto try_parse = [](restinio::string_view_t what) {
 		return hfp::try_parse_field_value< media_type_t >(
 			what,
-			hfp::rfc::token() >> &media_type_t::m_type,
+			hfp::rfc::token >> &media_type_t::m_type,
 			hfp::alternatives<char>(
 				hfp::symbol('/'),
 				hfp::symbol('='),
 				hfp::symbol('[')
 			) >> hfp::skip(),
-			hfp::rfc::token() >> &media_type_t::m_subtype );
+			hfp::rfc::token >> &media_type_t::m_subtype );
 	};
 
 	{
@@ -142,9 +142,9 @@ TEST_CASE( "produce media_type", "[produce][media_type]" )
 		return hfp::try_parse_field_value< media_type_holder_t >(
 				what,
 				hfp::produce< media_type_t >(
-					hfp::rfc::token() >> &media_type_t::m_type,
+					hfp::rfc::token >> &media_type_t::m_type,
 					hfp::symbol('/') >> hfp::skip(),
-					hfp::rfc::token() >> &media_type_t::m_subtype
+					hfp::rfc::token >> &media_type_t::m_subtype
 				) >> &media_type_holder_t::m_media
 			);
 	};
@@ -190,9 +190,9 @@ TEST_CASE( "simple repeat (vector target)", "[repeat][vector][simple]" )
 			hfp::repeat< std::vector< std::pair<std::string, std::string> > >(
 				0, hfp::N,
 				hfp::symbol(';') >> hfp::skip(),
-				hfp::rfc::token() >> &std::pair<std::string, std::string>::first,
+				hfp::rfc::token >> &std::pair<std::string, std::string>::first,
 				hfp::symbol('=') >> hfp::skip(),
-				hfp::rfc::token() >> &std::pair<std::string, std::string>::second
+				hfp::rfc::token >> &std::pair<std::string, std::string>::second
 			) >> &pairs_holder_t::m_pairs
 		);
 
@@ -216,9 +216,9 @@ TEST_CASE( "simple repeat (map target)", "[repeat][map][simple]" )
 			hfp::repeat< std::map<std::string, std::string> >(
 				0, hfp::N,
 				hfp::symbol(';') >> hfp::skip(),
-				hfp::rfc::token() >> &std::pair<std::string, std::string>::first,
+				hfp::rfc::token >> &std::pair<std::string, std::string>::first,
 				hfp::symbol('=') >> hfp::skip(),
-				hfp::rfc::token() >> &std::pair<std::string, std::string>::second
+				hfp::rfc::token >> &std::pair<std::string, std::string>::second
 			) >> &pairs_holder_t::m_pairs
 		);
 
@@ -239,24 +239,24 @@ TEST_CASE( "simple content_type", "[content_type][simple]" )
 			what,
 
 			hfp::produce< media_type_t >(
-				hfp::rfc::token() >> hfp::to_lower() >> &media_type_t::m_type,
+				hfp::rfc::token >> hfp::to_lower() >> &media_type_t::m_type,
 				hfp::symbol('/') >> hfp::skip(),
-				hfp::rfc::token() >> hfp::to_lower() >> &media_type_t::m_subtype
+				hfp::rfc::token >> hfp::to_lower() >> &media_type_t::m_subtype
 			) >> &content_type_t::m_media_type,
 
 			hfp::repeat< std::map<std::string, std::string> >(
 				0, hfp::N,
 				hfp::symbol(';') >> hfp::skip(),
-				hfp::rfc::ows() >> hfp::skip(),
+				hfp::rfc::ows >> hfp::skip(),
 
-				hfp::rfc::token() >> hfp::to_lower() >>
+				hfp::rfc::token >> hfp::to_lower() >>
 						&std::pair<std::string, std::string>::first,
 
 				hfp::symbol('=') >> hfp::skip(),
 
 				hfp::alternatives< std::string >(
-					hfp::rfc::token() >> hfp::to_lower(),
-					hfp::rfc::quoted_string()
+					hfp::rfc::token >> hfp::to_lower(),
+					hfp::rfc::quoted_string
 				) >> &std::pair<std::string, std::string>::second
 
 			) >> &content_type_t::m_parameters
@@ -373,23 +373,23 @@ TEST_CASE( "sequence with optional", "[optional][simple]" )
 		return hfp::try_parse_field_value< value_with_opt_params_t >(
 			what,
 
-			hfp::rfc::token() >> hfp::to_lower() >>
+			hfp::rfc::token >> hfp::to_lower() >>
 					&value_with_opt_params_t::m_value,
 
 			hfp::repeat< value_with_opt_params_t::param_storage_t >(
 				0, hfp::N,
 				hfp::symbol(';') >> hfp::skip(),
-				hfp::rfc::ows() >> hfp::skip(),
+				hfp::rfc::ows >> hfp::skip(),
 
-				hfp::rfc::token() >> hfp::to_lower() >>
+				hfp::rfc::token >> hfp::to_lower() >>
 						&value_with_opt_params_t::param_t::first,
 
 				hfp::optional< std::string >(
 					hfp::symbol('=') >> hfp::skip(),
 
 					hfp::alternatives< std::string >(
-						hfp::rfc::token() >> hfp::to_lower(),
-						hfp::rfc::quoted_string()
+						hfp::rfc::token >> hfp::to_lower(),
+						hfp::rfc::quoted_string
 					) >> hfp::as_result()
 
 				) >> &value_with_opt_params_t::param_t::second

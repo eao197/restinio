@@ -41,12 +41,12 @@ struct cache_control_value_t
 		return produce< cache_control_value_t >(
 			one_or_more_of< directive_container_t >(
 				produce< directive_t >(
-					rfc::token() >> to_lower() >> &directive_t::first,
+					rfc::token >> to_lower() >> &directive_t::first,
 					optional< std::string >(
 						symbol('=') >> skip(),
 						alternatives< std::string >(
-							rfc::token() >> to_lower(),
-							rfc::quoted_string() ) >> as_result()
+							rfc::token >> to_lower(),
+							rfc::quoted_string ) >> as_result()
 					) >> &directive_t::second
 				)
 			) >> &cache_control_value_t::m_directives
